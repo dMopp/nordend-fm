@@ -3150,7 +3150,8 @@ void Browser::mount_remote(const fs::Place& place, bool open) {
         return;
     }
     if (!remotes_.mount) {
-        show_message(std::format("“{}” could not be mounted: gvfs is not available", place.label),
+        show_message(std::format("“{}” could not be mounted: neither gvfs nor rclone is installed",
+                                 place.label),
                      true);
         return;
     }

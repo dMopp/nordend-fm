@@ -119,8 +119,8 @@ struct Devices {
     std::function<void(const std::string& volume, Done done)> eject;
 };
 
-// Network folders as the app connects them (gvfs): remote bookmarks mounted by their URI; tests
-// give a fake. Without it a remote bookmark says it cannot be mounted.
+// Network folders as the app connects them (gvfs or rclone): remote bookmarks mounted by their URI;
+// tests give a fake. Without it a remote bookmark says it cannot be mounted.
 struct Remotes {
     using Done = Devices::Done;
     using Mounted = Devices::Mounted;

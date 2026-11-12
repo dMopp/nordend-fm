@@ -114,6 +114,9 @@ public:
 
     [[nodiscard]] bool available() const noexcept;
 
+    // Whether gvfsd runs or the session bus can start it; nullopt until the bus has said.
+    [[nodiscard]] std::optional<bool> installed() const noexcept;
+
     [[nodiscard]] const std::vector<GvfsMount>& mounts() const noexcept;
 
     // What a mount asks the person, answered later on the loop thread: a name and a password,

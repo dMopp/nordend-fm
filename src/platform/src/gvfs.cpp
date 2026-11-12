@@ -263,6 +263,7 @@ struct Gvfs::Impl {
     std::vector<GvfsMount> mounts;
     std::map<std::uint64_t, std::unique_ptr<Operation>> operations;
     std::uint64_t next_operation{1};
+    std::optional<bool> installed;  // gvfsd runs or can be started
     std::shared_ptr<bool> alive{std::make_shared<bool>(true)};
     std::unique_ptr<BusLoop> bus;
 
@@ -436,6 +437,7 @@ Gvfs::Gvfs(core::EventLoop& loop, std::function<void()> changed)
                 if (after.empty()) {
                     impl_->forget_mounts();
                 } else {
+                    impl_->installed = true;
                     impl_->read_mounts();
                 }
             },
@@ -447,13 +449,25 @@ Gvfs::Gvfs(core::EventLoop& loop, std::function<void()> changed)
             .withArguments(std::string{kService})
             .uponReplyInvoke([this](std::optional<sdbus::Error> error, bool running) {
                 if (!error && running) {
+                    impl_->installed = true;
                     impl_->read_mounts();
                 }
             });
+        // Whether the bus can start gvfsd: without it, network folders are someone else's job.
+        impl_->bus_daemon->callMethodAsync("ListActivatableNames")
+            .onInterface("org.freedesktop.DBus")
+            .uponReplyInvoke(
+                [this](std::optional<sdbus::Error> error, const std::vector<std::string>& names) {
+                    if (impl_->installed.value_or(false)) {
+                        return;
+                    }
+                    impl_->installed = !error && std::ranges::find(names, kService) != names.end();
+                });
         impl_->pump();
     } catch (const sdbus::Error& error) {
-        log::warn("gvfs: no session bus ({}): network folders are not mounted from Nordend",
+        log::warn("gvfs: no session bus ({}): network folders are not mounted through gvfs",
                   error.getMessage());
+        impl_->installed = false;
         impl_->tracker.reset();
         impl_->bus_daemon.reset();
         impl_->bus.reset();
@@ -464,6 +478,8 @@ Gvfs::Gvfs(core::EventLoop& loop, std::function<void()> changed)
 Gvfs::~Gvfs() = default;
 
 bool Gvfs::available() const noexcept { return impl_->connection != nullptr; }
+
+std::optional<bool> Gvfs::installed() const noexcept { return impl_->installed; }
 
 const std::vector<GvfsMount>& Gvfs::mounts() const noexcept { return impl_->mounts; }
 

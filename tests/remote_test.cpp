@@ -506,7 +506,7 @@ TEST_CASE("remote: giving up, an error, and unmounting say how it went") {
     CHECK(f.shown() == f.share / "Scans");
 }
 
-TEST_CASE("remote: without gvfs a remote bookmark says so") {
+TEST_CASE("remote: without gvfs or rclone a remote bookmark says so") {
     TempDir dir;
     EventLoop loop;
     nordend::core::WorkerPool pool{loop, 2};
@@ -524,7 +524,7 @@ TEST_CASE("remote: without gvfs a remote bookmark says so") {
                         .disk = {.volume = {}, .mounted = false, .ejectable = false},
                         .uri = "smb://nas/Public"});
     CHECK(browser.status_bar().message() ==
-          "“Public on nas” could not be mounted: gvfs is not available");
+          "“Public on nas” could not be mounted: neither gvfs nor rclone is installed");
     CHECK(browser.columns().focused_folder()->path() == dir.path);
 }
 

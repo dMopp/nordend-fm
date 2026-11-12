@@ -40,6 +40,7 @@
 #include "nordend/platform/gvfs.hpp"
 #include "nordend/platform/opener.hpp"
 #include "nordend/platform/portal.hpp"
+#include "nordend/platform/rclone.hpp"
 #include "nordend/platform/udisks.hpp"
 #include "nordend/theme/app_icon.hpp"
 #include "nordend/theme/theme.hpp"
@@ -623,15 +624,20 @@ int main(int argc, char** argv) {
         std::unique_ptr<fs::PlacesWatcher> places;
         std::unique_ptr<platform::Udisks> udisks;
         std::unique_ptr<platform::Gvfs> gvfs;
+        std::unique_ptr<platform::Rclone> rclone;
         if (columns) {
             const auto show_places = [&] {
                 if (places) {
                     std::vector<fs::Place> shown =
                         udisks ? platform::with_volumes(places->places(), udisks->volumes())
                                : places->places();
-                    columns->set_places(
-                        gvfs ? platform::with_remote_mounts(std::move(shown), gvfs->mounts())
-                             : std::move(shown));
+                    if (gvfs) {
+                        shown = platform::with_remote_mounts(std::move(shown), gvfs->mounts());
+                    }
+                    if (rclone) {
+                        shown = rclone->places(std::move(shown));
+                    }
+                    columns->set_places(std::move(shown));
                 }
             };
             places = std::make_unique<fs::PlacesWatcher>(loop, fs::PlaceSources::from_environment(),
@@ -653,19 +659,39 @@ int main(int argc, char** argv) {
                         },
                 });
             }
-            // Remote bookmarks (smb://, sftp://, ftp://, WebDAV), mounted through gvfs on the
-            // session bus.
+            // Remote bookmarks (smb://, sftp://, ftp://, WebDAV): mounted through gvfs on the
+            // session bus where gvfs is installed, else with rclone when that is.
             gvfs = std::make_unique<platform::Gvfs>(loop, show_places);
-            if (gvfs->available()) {
+            if (const std::optional<std::filesystem::path> program =
+                    platform::Rclone::find_program()) {
+                rclone = std::make_unique<platform::Rclone>(
+                    loop, pool, *program, platform::Rclone::default_root(), show_places);
+            }
+            // Until the bus has said whether gvfs is there, it is taken to be.
+            const auto use_gvfs = [&] {
+                return gvfs->available() && (!rclone || gvfs->installed().value_or(true));
+            };
+            if (gvfs->available() || rclone) {
                 columns->set_remotes({
                     .mount =
                         [&](const std::string& uri, views::Remotes::Prompts prompts,
                             views::Remotes::Mounted done) {
-                            gvfs->mount(uri, remote_prompts(std::move(prompts)), std::move(done));
+                            if (use_gvfs()) {
+                                gvfs->mount(uri, remote_prompts(std::move(prompts)),
+                                            std::move(done));
+                            } else {
+                                rclone->mount(uri, remote_prompts(std::move(prompts)),
+                                              std::move(done));
+                            }
                         },
+                    // By who mounted it: a share rclone mounted stays rclone's.
                     .unmount =
                         [&](const std::string& uri, views::Remotes::Done done) {
-                            gvfs->unmount(uri, std::move(done));
+                            if (rclone && (rclone->holds(uri) || !use_gvfs())) {
+                                rclone->unmount(uri, std::move(done));
+                            } else {
+                                gvfs->unmount(uri, std::move(done));
+                            }
                         },
                 });
             }
