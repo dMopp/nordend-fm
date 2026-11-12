@@ -21,10 +21,11 @@ struct Place {
 
     Section section{Section::places};
     std::string label;
-    std::filesystem::path path;  // empty for a disk not mounted
+    std::filesystem::path path;  // empty for a disk or a remote bookmark not mounted
     std::string_view icon;       // a Tabler icon name
 
-    // A disk (Section::devices) as udisks2 knows it; empty without udisks2.
+    // A disk (Section::devices) as udisks2 knows it; empty without udisks2. A remote bookmark
+    // uses mounted and ejectable too: not mounted until gvfs mounts it, then ejectable.
     struct Disk {
         std::string volume;     // its object
         bool mounted{true};     // false: listed by udisks2, not mounted (path empty)
@@ -34,6 +35,10 @@ struct Place {
     };
 
     Disk disk{};
+
+    // A remote bookmark (Section::bookmarks): its URI as the bookmarks file has it
+    // ("smb://server/share"); empty for local places.
+    std::string uri{};
 
     bool operator==(const Place&) const = default;
 };
@@ -69,8 +74,28 @@ struct UserDir {
 // without that file (as the sidebar's user dirs); empty when there is none.
 [[nodiscard]] std::filesystem::path templates_dir(const PlaceSources& sources);
 
-// The local folders in a GTK bookmarks file ("file:///path%20with%20spaces Label"); other URIs
-// (sftp://, smb://) are left out. Without a label, the folder's name.
+// A remote location as a bookmark names it: smb://, sftp://, ftp://, dav:// or davs://. Every part
+// percent-decoded; userinfo kept whole ("DOMAIN;user" for smb).
+struct RemoteUri {
+    std::string scheme;  // "smb", "sftp", "ftp", "dav", "davs"
+    std::string user;
+    std::string host;  // without the brackets of an IPv6 literal
+    int port{-1};      // -1: none given
+    std::string path;  // "/" at least
+
+    bool operator==(const RemoteUri&) const = default;
+};
+
+// uri as a RemoteUri; nullopt for another scheme, no host, or a port that is not one.
+[[nodiscard]] std::optional<RemoteUri> parse_remote_uri(std::string_view uri);
+
+// What the sidebar calls a remote bookmark without a label: "Public on fileshare" for a folder
+// (the last one in the path), the host alone for the server's root.
+[[nodiscard]] std::string remote_label(const RemoteUri& uri);
+
+// The places in a GTK bookmarks file: the local folders ("file:///path%20with%20spaces Label")
+// and the remote ones Nordend can mount (the schemes above), without a path until mounted; other
+// URIs are left out. Without a label, the folder's name (remote_label for a remote one).
 [[nodiscard]] std::vector<Place> parse_bookmarks(std::string_view text);
 
 // The GTK bookmarks file: gtk-3.0/bookmarks in config_home (GTK 4 reads the same one).
@@ -84,6 +109,11 @@ struct UserDir {
 // The text without folder's lines; nullopt when it has none. The other lines stay as they are.
 [[nodiscard]] std::optional<std::string> remove_bookmark(std::string_view text,
                                                          const std::filesystem::path& folder);
+
+// The text without the lines naming uri (a remote bookmark, compared as written); nullopt when it
+// has none. The other lines stay as they are.
+[[nodiscard]] std::optional<std::string> remove_remote_bookmark(std::string_view text,
+                                                                std::string_view uri);
 
 // The mount points in /proc/self/mountinfo's text under /run/media, /media and /mnt: where
 // removable and data disks land. Octal escapes (\040 for a space) decoded.

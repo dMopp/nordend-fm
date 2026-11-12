@@ -43,6 +43,12 @@ public:
 
     [[nodiscard]] const std::string& text() const noexcept { return text_; }
 
+    // A password's field: every character drawn as a dot, Ctrl+Left and Ctrl+Right go to the
+    // ends (the words would show through).
+    void set_masked(bool masked) noexcept { masked_ = masked; }
+
+    [[nodiscard]] bool masked() const noexcept { return masked_; }
+
     // Selects [begin, end) (clamped, moved back to character boundaries); the caret at end.
     void select(std::size_t begin, std::size_t end);
 
@@ -101,6 +107,8 @@ private:
     // Removes [first, last) and puts the caret there.
     void erase(std::size_t first, std::size_t last);
     [[nodiscard]] float width_of(FontSystem& fonts, std::size_t bytes) const;
+    // What is drawn of the first bytes of the text: themselves, or a dot for each character.
+    [[nodiscard]] std::string drawn(std::size_t bytes) const;
 
     std::string text_;
     std::size_t caret_{0};
@@ -113,6 +121,7 @@ private:
     std::vector<State> undo_;     // oldest first
     std::vector<State> redo_;
     Edit last_edit_{Edit::other};  // other: the next edit starts a new one
+    bool masked_{false};
 };
 
 }  // namespace nordend::ui

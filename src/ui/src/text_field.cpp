@@ -105,6 +105,9 @@ std::size_t TextField::next(std::size_t at) const noexcept {
 }
 
 std::size_t TextField::previous_word(std::size_t at) const noexcept {
+    if (masked_) {
+        return 0;
+    }
     while (at > 0 && separator(text_[previous(at)])) {
         at = previous(at);
     }
@@ -115,6 +118,9 @@ std::size_t TextField::previous_word(std::size_t at) const noexcept {
 }
 
 std::size_t TextField::next_word(std::size_t at) const noexcept {
+    if (masked_) {
+        return text_.size();
+    }
     while (at < text_.size() && separator(text_[at])) {
         at = next(at);
     }
@@ -233,11 +239,23 @@ bool TextField::key(const KeyEvent& event) {
     return false;
 }
 
+std::string TextField::drawn(std::size_t bytes) const {
+    bytes = std::min(bytes, text_.size());
+    if (!masked_) {
+        return text_.substr(0, bytes);
+    }
+    std::string dots;
+    for (std::size_t at = 0; at < bytes; at = next(at)) {
+        dots += "\u2022";
+    }
+    return dots;
+}
+
 float TextField::width_of(FontSystem& fonts, std::size_t bytes) const {
     if (bytes == 0) {
         return 0.0F;
     }
-    return fonts.layout(std::string_view{text_}.substr(0, bytes), size_, scale_).width / scale_;
+    return fonts.layout(drawn(bytes), size_, scale_).width / scale_;
 }
 
 void TextField::click(float x, bool extend) {
@@ -292,7 +310,8 @@ void TextField::draw(Renderer& renderer, const Rect& rect, float size, const Fie
         const float to = width_of(*fonts_, last);
         renderer.fill_rect({x + from, line_y, to - from, line}, colors.selection);
     }
-    renderer.draw_text(text_, x, rect.y + ((rect.height - size) / 2.0F) - 2.0F, size, colors.text);
+    renderer.draw_text(drawn(text_.size()), x, rect.y + ((rect.height - size) / 2.0F) - 2.0F, size,
+                       colors.text);
     renderer.fill_rect({x + caret_x, line_y, kCaretWidth, line}, colors.caret);
     renderer.pop_clip();
 }

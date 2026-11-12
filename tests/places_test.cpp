@@ -108,13 +108,19 @@ TEST_CASE("places: GTK bookmarks") {
         "sftp://host/home/me Remote\n"
         "file:///bad%zzescape\n"
         "\n");
-    REQUIRE(places.size() == 3);
+    REQUIRE(places.size() == 4);
     CHECK(places[0].label == "Photos");
     CHECK(places[0].path == "/run/media/me/DATA/fotografia");
     CHECK(places[0].section == Place::Section::bookmarks);
+    CHECK(places[0].uri.empty());
     CHECK(places[1].label == "with space");
     CHECK(places[1].path == "/tmp/with space");
-    CHECK(places[2].path == "/bad%zzescape");
+    // A remote one has no path until gvfs mounts it.
+    CHECK(places[2].label == "Remote");
+    CHECK(places[2].uri == "sftp://host/home/me");
+    CHECK(places[2].path.empty());
+    CHECK_FALSE(places[2].disk.mounted);
+    CHECK(places[3].path == "/bad%zzescape");
 }
 
 TEST_CASE("bookmarks: added at the end as GLib writes them, removed, the rest kept") {
